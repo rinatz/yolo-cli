@@ -1,4 +1,4 @@
-# `yolo-cli`
+# `yolotools`
 
 YOLO toolset for annotating images.
 
@@ -19,17 +19,7 @@ $ poetry shell
 Output annotations to stdout by JSON and write it to the image.
 
 ```shell
-$ python -m yolo <IMAGE> --output-image output.jpg
+$ python -m yolo <IMAGE> --output-image output.jpg --pretty
 ```
 
-## Output annotations by Pascal VOC format
-
-```shell
-$ python -m yolo <IMAGE> | python voc_xml.py
-```
-
-## Output annotations by Google Vision AutoML CSV format
-
-```shell
-$ python -m yolo <IMAGE> | python voc_xml.py | python automl_csv.py
-```
+When passing `--format=xml` option, resulting annotations are printed by Pascal VOC XML format.
