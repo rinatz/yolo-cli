@@ -4,6 +4,9 @@ version = "0.1.0"
 description = "YOLO toolset for annotating images"
 authors = ["IDA Kenichiro <ida.kenichiro@gmail.com>"]
 
+[tool.poetry.scripts]
+yolo = "yolotools.cli:main"
+
 [tool.poetry.dependencies]
 python = "^3.6"
 opencv-python-headless = "^4.4.0"

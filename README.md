@@ -10,8 +10,8 @@ YOLO toolset for annotating images.
 ## Install
 
 ```shell
-$ poetry install
-$ poetry shell
+$ pip install -U pip
+$ pip install git+https://github.com/rinatz/yolotools
 ```
 
 ## Object detection

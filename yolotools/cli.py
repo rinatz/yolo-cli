@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 from enum import Enum
 import json
 
@@ -8,8 +6,8 @@ import rich
 import typer
 import xmltodict
 
-from yolo.config import REGULARIZER, SCORE_THRESHOLD, NMS_THRESHOLD
-from yolo.model import (
+from yolotools.config import REGULARIZER, SCORE_THRESHOLD, NMS_THRESHOLD
+from yolotools.model import (
     Weight,
     Yolo,
     load_img,
@@ -17,7 +15,7 @@ from yolo.model import (
     decode_predictions,
     plot_bbox,
 )
-from yolo.voc import to_voc
+from yolotools.voc import to_voc
 
 
 class OutputFormat(str, Enum):
@@ -25,7 +23,7 @@ class OutputFormat(str, Enum):
     xml = "xml"
 
 
-def main(
+def _main(
     # fmt: off
     image: str = typer.Argument(..., help="Image path"),
     regularizer: float = typer.Option(REGULARIZER, help="The regularization factor of mean subtraction"),
@@ -80,5 +78,5 @@ def main(
         cv.imwrite(output_image, out_img)
 
 
-if __name__ == "__main__":
-    typer.run(main)
+def main():
+    typer.run(_main)

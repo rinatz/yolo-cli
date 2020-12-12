@@ -5,9 +5,9 @@ from typing import List, Tuple
 import cv2 as cv
 import numpy as np
 
-from yolo.dataset import download
+from yolotools.dataset import download
 
-from yolo.config import (
+from yolotools.config import (
     DATASET_PATH,
     CONFIG_URL,
     MODEL_URL,
