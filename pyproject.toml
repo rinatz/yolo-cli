@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "yolo-cli"
+name = "yolotools"
 version = "0.1.0"
 description = "YOLO toolset for annotating images"
 authors = ["IDA Kenichiro <ida.kenichiro@gmail.com>"]
@@ -8,7 +8,7 @@ authors = ["IDA Kenichiro <ida.kenichiro@gmail.com>"]
 python = "^3.6"
 Jinja2 = "^2.11.2"
 labelImg = "^1.8.4"
-opencv-python = "^4.4.0"
+opencv-python-headless = "^4.4.0"
 requests = "^2.25.0"
 rich = "^9.3.0"
 typer = "^0.3.2"
