@@ -23,7 +23,7 @@ class OutputFormat(str, Enum):
     xml = "xml"
 
 
-def _run(
+def run(
     # fmt: off
     image: str = typer.Argument(..., help="Image path"),
     regularizer: float = typer.Option(REGULARIZER, help="The regularization factor of mean subtraction"),
@@ -78,5 +78,5 @@ def _run(
         cv.imwrite(output_image, out_img)
 
 
-def run():
-    typer.run(_run)
+def main():
+    typer.run(run)

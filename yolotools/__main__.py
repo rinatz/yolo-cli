@@ -2,4 +2,4 @@
 
 from yolotools import cli
 
-cli.run()
+cli.main()
