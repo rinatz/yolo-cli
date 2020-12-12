@@ -1,5 +1,5 @@
 #!/usr/bin/env python
 
-from yolo import cli
+from yolotools import cli
 
 cli.main()
