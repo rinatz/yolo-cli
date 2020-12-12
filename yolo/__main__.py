@@ -62,7 +62,7 @@ def main(
         content = json.dumps(voc_dict, indent=indent, ensure_ascii=False)
     elif format == OutputFormat.xml:
         content = xmltodict.unparse(voc_dict, pretty=pretty)
-        content = content.replace('<?xml version="1.0" encoding="utf-8"?>', "").strip()
+        content = content[len('<?xml version="1.0" encoding="utf-8"?>'):].strip()
     else:
         raise typer.Exit(1)
 
