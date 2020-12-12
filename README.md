@@ -4,13 +4,12 @@ YOLO toolset for annotating images.
 
 ## Requirements
 
-- Python 3
-- Poetry
+- Python >=3.6
+- Pip >= 19.0
 
 ## Install
 
 ```shell
-$ pip install -U pip
 $ pip install git+https://github.com/rinatz/yolotools
 ```
 
