@@ -1,6 +1,5 @@
-from enum import Enum
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Union
 
 import cv2 as cv
 import numpy as np
@@ -12,148 +11,152 @@ from yolotools.config import (
     CONFIG_URL,
     MODEL_URL,
     NAMES_URL,
-    REGULARIZER,
     SCORE_THRESHOLD,
-    NMS_THRESHOLD,
+    IOU_THRESHOLD,
     BBOX_BORDER_COLOR,
 )
 
 
 class Yolo:
-    def __init__(self):
-        download(CONFIG_URL, DATASET_PATH)
-        download(MODEL_URL, DATASET_PATH)
+    def __init__(self, dataset_path: Union[str, Path] = DATASET_PATH):
+        dataset_path = Path(dataset_path)
 
-        dataset_path = Path(DATASET_PATH)
-        config_path = str(dataset_path.joinpath("yolov4.cfg"))
-        model_path = str(dataset_path.joinpath("yolov4.weights"))
+        config_path = download(CONFIG_URL, dataset_path)
+        model_path = download(MODEL_URL, dataset_path)
+        names_path = download(NAMES_URL, dataset_path)
 
-        self.net = cv.dnn.readNet(config_path, model_path)
-        self.net.setPreferableBackend(cv.dnn.DNN_BACKEND_OPENCV)
+        self._net = cv.dnn.readNet(str(config_path), str(model_path))
+        self._net.setPreferableBackend(cv.dnn.DNN_BACKEND_OPENCV)
+        self._input_size = (416, 416)
 
-    def predict(self, x):
-        self.net.setInput(x)
-        layer_names = self.net.getUnconnectedOutLayersNames()
+        with names_path.open() as f:
+            self._names = {k: v.strip() for k, v in enumerate(f)}
 
-        preds = self.net.forward(layer_names)
+    @property
+    def input_size(self):
+        return self._input_size
 
-        return preds
+    @input_size.setter
+    def input_size(self, value):
+        self._input_size = value
 
+    @property
+    def names(self):
+        return self._names
 
-class Weight(str, Enum):
-    small = "small"
-    middle = "middle"
-    large = "large"
-    xlarge = "xlarge"
+    def predict(
+        self,
+        image,
+        *,
+        score_threshold: float = SCORE_THRESHOLD,
+        iou_threshold: float = IOU_THRESHOLD,
+        names: List[str] = [],
+    ):
+        REGULARIZER = 1 / 255.0
 
-
-def load_img(img_file):
-    return cv.imread(img_file)
-
-
-def img_to_array(
-    img, *, regularizer: float = REGULARIZER, weight: Weight = Weight.middle
-):
-    target_size = {
-        Weight.small: (320, 320),
-        Weight.middle: (416, 416),
-        Weight.large: (512, 512),
-        Weight.xlarge: (608, 608),
-    }[weight]
-
-    return cv.dnn.blobFromImage(img, regularizer, target_size, swapRB=True, crop=False)
-
-
-def decode_predictions(
-    preds,
-    *,
-    target_size: Tuple[int, int] = (1, 1),
-    score_threshold: float = SCORE_THRESHOLD,
-    nms_threshold: float = NMS_THRESHOLD,
-    names: List[str] = [],
-):
-    download(NAMES_URL, DATASET_PATH)
-    names_path = str(Path(DATASET_PATH).joinpath("coco.names"))
-
-    with open(names_path) as f:
-        all_names = f.read().splitlines()
-
-    labels, scores, bboxes = [], [], []
-
-    for pred in np.vstack(preds):
-        label = np.argmax(pred[5:])
-        score = pred[5:][label]
-
-        if names and all_names[label] not in names:
-            continue
-
-        x, y, width, height = pred[:4] * np.array([*target_size, *target_size])
-        x_min, y_min = x - width / 2.0, y - height / 2.0
-
-        labels.append(label)
-        scores.append(float(score))
-        bboxes.append([int(x_min), int(y_min), int(width), int(height)])
-
-    indices = cv.dnn.NMSBoxes(bboxes, scores, score_threshold, nms_threshold)
-
-    if not len(indices):
-        return []
-
-    annotations = []
-
-    for i in indices.flatten():
-        x_min, y_min, width, height = bboxes[i]
-        x_max, y_max = x_min + width, y_min + height
-
-        if x_min < 0:
-            x_min = 0
-
-        if y_min < 0:
-            y_min = 0
-
-        if x_max > target_size[0]:
-            x_max = target_size[0]
-
-        if y_max > target_size[1]:
-            y_max = target_size[1]
-
-        label, score = labels[i], scores[i]
-        name = all_names[label]
-
-        annotations.append(
-            {
-                "name": name,
-                "score": score,
-                "bbox": [x_min, y_min, x_max, y_max],
-            }
+        x = cv.dnn.blobFromImage(
+            image, REGULARIZER, self.input_size, swapRB=True, crop=False
         )
 
-    return annotations
+        self._net.setInput(x)
 
+        layer_names = self._net.getUnconnectedOutLayersNames()
+        y = self._net.forward(layer_names)
 
-def plot_bbox(img, annotations):
-    out_img = np.copy(img)
+        bboxes, labels, scores = [], [], []
+        SCALE = np.array([100, 100, 100, 100], dtype=np.float)
 
-    for annotation in annotations:
-        x_min, y_min, x_max, y_max = annotation["bbox"]
-        name = annotation["name"]
-        score = annotation["score"]
+        for pred in np.vstack(y):
+            label = np.argmax(pred[5:])
+            score = pred[5:][label]
 
-        cv.rectangle(
-            out_img,
-            pt1=(x_min, y_min),
-            pt2=(x_max, y_max),
-            color=BBOX_BORDER_COLOR,
-            thickness=4,
+            x_center, y_center, width, height = pred[:4] * SCALE
+            x_min, y_min = x_center - width / 2.0, y_center - height / 2.0
+
+            if x_min < 0.0:
+                x_min = 0.0
+
+            if y_min < 0.0:
+                y_min = 0.0
+
+            if x_min + width > image.shape[1]:
+                width = image.shape[1] - x_min
+
+            if y_min + height > image.shape[0]:
+                height = image.shape[0] - y_min
+
+            bboxes.append([int(x_min), int(y_min), int(width), int(height)])
+            labels.append(label)
+            scores.append(float(score))
+
+        indices = cv.dnn.NMSBoxes(bboxes, scores, score_threshold, iou_threshold)
+
+        if not len(indices):
+            return []
+
+        predictions = []
+
+        for i in indices.flatten():
+            x_min, y_min, width, height = bboxes[i] / SCALE
+            x_center, y_center = x_min + width / 2.0, y_min + height / 2.0
+
+            label, score = labels[i], scores[i]
+
+            if names and self.names[label] not in names:
+                continue
+
+            predictions.append([x_center, y_center, width, height, label, score])
+
+        return predictions
+
+    def plot_bbox(self, image, predictions):
+        output = np.copy(image)
+        h, w = output.shape[:2]
+        scale = np.array([w, h, w, h])
+
+        for pred in predictions:
+            x_center, y_center, width, height = pred[:4] * scale
+            x_min, y_min = int(x_center - width / 2.0), int(y_center - height / 2.0)
+            x_max, y_max = int(x_min + width), int(y_min + height)
+
+            name, score = self.names[pred[4]], pred[5]
+
+            cv.rectangle(
+                output,
+                pt1=(x_min, y_min),
+                pt2=(x_max, y_max),
+                color=BBOX_BORDER_COLOR,
+                thickness=4,
+            )
+            cv.putText(
+                output,
+                text=f"{name}: {score * 100:.1f}%",
+                org=(x_min, y_min - 20),
+                fontFace=cv.FONT_HERSHEY_DUPLEX,
+                fontScale=2,
+                color=BBOX_BORDER_COLOR,
+                thickness=2,
+            )
+
+        return output
+
+    def infer(
+        self,
+        image_path,
+        *,
+        score_threshold: float = SCORE_THRESHOLD,
+        iou_threshold: float = IOU_THRESHOLD,
+        names: List[str] = [],
+    ):
+        image = cv.imread(image_path)
+
+        preds = self.predict(
+            image,
+            score_threshold=score_threshold,
+            iou_threshold=iou_threshold,
+            names=names,
         )
-        cv.putText(
-            out_img,
-            text=f"{name}: {score:.2f}",
-            org=(x_min, y_min - 20),
-            fontFace=cv.FONT_HERSHEY_DUPLEX,
-            fontScale=2,
-            color=BBOX_BORDER_COLOR,
-            thickness=2,
-        )
 
-    return out_img
+        output_image = self.plot_bbox(image, preds)
+
+        return preds, output_image

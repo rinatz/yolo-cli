@@ -1,12 +1,13 @@
 from pathlib import Path
 import os
+from typing import Union
 from urllib.parse import urlparse
 
 import requests
 from rich.progress import Progress
 
 
-def download(url: str, dest: str):
+def download(url: str, dest: Union[str, Path]):
     dest = Path(dest).expanduser()
     os.makedirs(dest, exist_ok=True)
 
@@ -14,7 +15,7 @@ def download(url: str, dest: str):
     filename = dest.joinpath(basename)
 
     if filename.is_file():
-        return
+        return filename
 
     response = requests.get(url, stream=True)
 
@@ -30,3 +31,5 @@ def download(url: str, dest: str):
         while not progress.finished:
             f.write(next(data))
             progress.update(task, advance=chunk_size)
+
+    return filename

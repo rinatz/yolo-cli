@@ -1,81 +1,49 @@
-from enum import Enum
-import json
+import sys
 
 import cv2 as cv
-import rich
 import typer
-import xmltodict
 
-from yolotools.config import REGULARIZER, SCORE_THRESHOLD, NMS_THRESHOLD
-from yolotools.model import (
-    Weight,
-    Yolo,
-    load_img,
-    img_to_array,
-    decode_predictions,
-    plot_bbox,
-)
-from yolotools.voc import to_voc
-
-
-class OutputFormat(str, Enum):
-    json = "json"
-    xml = "xml"
+from yolotools.config import SCORE_THRESHOLD, IOU_THRESHOLD
+from yolotools.model import Yolo
 
 
 def run(
     # fmt: off
-    image: str = typer.Argument(..., help="Image path"),
-    regularizer: float = typer.Option(REGULARIZER, help="The regularization factor of mean subtraction"),
-    weight: Weight = typer.Option(Weight.middle, "--weight", "-w", help="The scale of the model"),
+    image_path: str = typer.Argument(..., help="Image path"),
     score_threshold: float = typer.Option(SCORE_THRESHOLD, help="The confidence score threshold"),
-    nms_threshold: float = typer.Option(NMS_THRESHOLD, help="The non-maximum supression threshold"),
+    iou_threshold: float = typer.Option(IOU_THRESHOLD, help="The non-maximum supression threshold"),
     names: str = typer.Option(None, "--names", "-n", help="Comma separated names to annotate"),
-    pretty: bool = typer.Option(False, "--pretty", "-p", help="Print annotations with pretty-printed"),
-    format: OutputFormat = typer.Option(OutputFormat.json, "--format", "-f", help="Output format of annotations"),
-    output: str = typer.Option(None, "--output", "-o", help="Filename to store annotations"),
-    output_image: str = typer.Option(None, help="Annotated image file to store"),
+    output_path: str = typer.Option(None, "--output", "-o", help="Filename to store annotations"),
+    output_image_path: str = typer.Option(None, "--output-image", help="Annotated image file to store"),
     # fmt: on
 ):
-    model = Yolo()
+    yolo = Yolo()
+    image = cv.imread(image_path)
 
-    img = load_img(image)
-    height, width = img.shape[:2]
-
-    x = img_to_array(img, regularizer=regularizer, weight=weight)
-    preds = model.predict(x)
-
-    annotations = decode_predictions(
-        preds,
-        target_size=(width, height),
+    preds = yolo.predict(
+        image,
         score_threshold=score_threshold,
-        nms_threshold=nms_threshold,
-        names=names.split(",") if names else [],
+        iou_threshold=iou_threshold,
+        names=names,
     )
 
-    voc_dict = to_voc(image, img, annotations)
-
-    if format == OutputFormat.json:
-        indent = 4 if pretty else None
-        content = json.dumps(voc_dict, indent=indent, ensure_ascii=False)
-    elif format == OutputFormat.xml:
-        content = xmltodict.unparse(voc_dict, pretty=pretty)
-        content = content[len('<?xml version="1.0" encoding="utf-8"?>'):].strip()
+    if output_path:
+        out = open(output_path, "w")
+        close_output = out.close
     else:
-        raise typer.Exit(1)
+        out = sys.stdout
+        close_output = lambda: None
 
-    if output:
-        with open(output, "w") as f:
-            f.write(content)
-    else:
-        if pretty:
-            rich.print(content)
-        else:
-            print(content)
+    try:
+        for pred in preds:
+            x, y, w, h, label, score = pred
+            out.write(f"{label} {x:.06f} {y:.06f} {w:.06f} {h:.06f} {score:.06f}\n")
+    finally:
+        close_output()
 
-    if output_image:
-        out_img = plot_bbox(img, annotations)
-        cv.imwrite(output_image, out_img)
+    if output_image_path:
+        output_image = yolo.plot_bbox(image, preds)
+        cv.imwrite(output_image_path, output_image)
 
 
 def main():
