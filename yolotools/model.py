@@ -13,7 +13,7 @@ from yolotools.config import (
     NAMES_URL,
     SCORE_THRESHOLD,
     IOU_THRESHOLD,
-    BBOX_BORDER_COLOR,
+    BOX_BORDER_COLOR,
 )
 
 
@@ -52,10 +52,8 @@ class Yolo:
         iou_threshold: float = IOU_THRESHOLD,
         names: List[str] = [],
     ):
-        REGULARIZER = 1 / 255.0
-
         x = cv.dnn.blobFromImage(
-            image, REGULARIZER, self.input_size, swapRB=True, crop=False
+            image, 1 / 255.0, self.input_size, swapRB=True, crop=False
         )
 
         self._net.setInput(x)
@@ -63,14 +61,16 @@ class Yolo:
         layer_names = self._net.getUnconnectedOutLayersNames()
         y = self._net.forward(layer_names)
 
-        bboxes, labels, scores = [], [], []
-        SCALE = np.array([100, 100, 100, 100], dtype=np.float)
+        boxes, labels, scores = [], [], []
 
         for pred in np.vstack(y):
             label = np.argmax(pred[5:])
             score = pred[5:][label]
 
-            x_center, y_center, width, height = pred[:4] * SCALE
+            if score <= score_threshold:
+                continue
+
+            x_center, y_center, width, height = pred[:4]
             x_min, y_min = x_center - width / 2.0, y_center - height / 2.0
 
             if x_min < 0.0:
@@ -79,62 +79,50 @@ class Yolo:
             if y_min < 0.0:
                 y_min = 0.0
 
-            if x_min + width > image.shape[1]:
-                width = image.shape[1] - x_min
-
-            if y_min + height > image.shape[0]:
-                height = image.shape[0] - y_min
-
-            bboxes.append([int(x_min), int(y_min), int(width), int(height)])
+            boxes.append([float(x_min), float(y_min), float(width), float(height)])
             labels.append(label)
             scores.append(float(score))
 
-        indices = cv.dnn.NMSBoxes(bboxes, scores, score_threshold, iou_threshold)
-
-        if not len(indices):
-            return []
+        indices = cv.dnn.NMSBoxes(boxes, scores, score_threshold, iou_threshold)
 
         predictions = []
 
         for i in indices.flatten():
-            x_min, y_min, width, height = bboxes[i] / SCALE
-            x_center, y_center = x_min + width / 2.0, y_min + height / 2.0
-
+            x_min, y_min, width, height = boxes[i]
             label, score = labels[i], scores[i]
 
             if names and self.names[label] not in names:
                 continue
 
-            predictions.append([x_center, y_center, width, height, label, score])
+            predictions.append([x_min, y_min, width, height, label, score])
 
         return predictions
 
-    def plot_bbox(self, image, predictions):
+    def draw_bounding_boxes(self, image, predictions):
         output = np.copy(image)
         h, w = output.shape[:2]
         scale = np.array([w, h, w, h])
 
         for pred in predictions:
-            x_center, y_center, width, height = pred[:4] * scale
-            x_min, y_min = int(x_center - width / 2.0), int(y_center - height / 2.0)
-            x_max, y_max = int(x_min + width), int(y_min + height)
+            x_min, y_min, width, height = pred[:4] * scale
+            x_max, y_max = x_min + width, y_min + height
 
             name, score = self.names[pred[4]], pred[5]
 
             cv.rectangle(
                 output,
-                pt1=(x_min, y_min),
-                pt2=(x_max, y_max),
-                color=BBOX_BORDER_COLOR,
+                pt1=(int(x_min), int(y_min)),
+                pt2=(int(x_max), int(y_max)),
+                color=BOX_BORDER_COLOR,
                 thickness=4,
             )
             cv.putText(
                 output,
                 text=f"{name}: {score * 100:.1f}%",
-                org=(x_min, y_min - 20),
+                org=(int(x_min), int(y_min) - 20),
                 fontFace=cv.FONT_HERSHEY_DUPLEX,
                 fontScale=2,
-                color=BBOX_BORDER_COLOR,
+                color=BOX_BORDER_COLOR,
                 thickness=2,
             )
 
@@ -157,6 +145,6 @@ class Yolo:
             names=names,
         )
 
-        output_image = self.plot_bbox(image, preds)
+        output_image = self.draw_bounding_boxes(image, preds)
 
         return preds, output_image
